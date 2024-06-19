@@ -26,7 +26,7 @@ dash.register_page(__name__)
 layout = html.Div([
     html.Div([
         dcc.Markdown('''
-                     ### Music Features Overview
+                     ### Spotify Audio Features by Continent
                         The scatter plot on the left is the average value of x and y features on the selected date for each country,
                         they are collored based on its continent.
                         You can change the x and y axis to any of the following track features listed below.
