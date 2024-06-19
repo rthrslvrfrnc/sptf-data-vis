@@ -25,7 +25,7 @@ def get_custom_playlist(playlist_id, playlist_name, enao):
   try:
     res = sp.playlist_tracks(playlist_id=playlist_id)
   except spotipy.SpotifyException:
-    return pd.DataFrame(), pd.DataFrame()
+    return pd.DataFrame()
   
   current_play_dt = {k: [] for k in playlist_data_keys}
   for pos, item in enumerate(res['items'], start=1):

@@ -62,6 +62,8 @@ layout = html.Div([
         html.H2(id='table-title'),
         dash_table.DataTable(
             sort_action="native",
+            filter_action='native',
+
             style_data={
                 'whiteSpace': 'normal',
                 'height': 'auto',

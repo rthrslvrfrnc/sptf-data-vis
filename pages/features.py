@@ -4,7 +4,7 @@ import dash
 import pickle
 from scipy.spatial import Delaunay
 from shapely.geometry import MultiPoint
-from dash import dcc, html, dash_table, callback, Input, Output
+from dash import dcc, html, dash_table, callback, Input, Output, callback_context
 # from dash.dependencies import 
 import plotly.express as px
 import plotly.graph_objects as go
@@ -86,11 +86,11 @@ layout = html.Div([
     html.Div([
         dcc.Graph(
             id='crossfilter-indicator-scatter',
-            clickData={'points': [{'hovertext': 'Japan'}]}
+            clickData={'points': [{'hovertext': 'Brazil'}]}
         ),
         html.Label(children=html.B('Choose a date:'), style={'display': 'block'}),
         html.Div(dcc.DatePickerSingle(
-                id='crossfilter-year--slider',
+                id='crossfilter-date--picker',
                 min_date_allowed=spotify_top50_daily_wGenres['snapshot_date'].min(),
                 max_date_allowed=spotify_top50_daily_wGenres['snapshot_date'].max(),
                 initial_visible_month=spotify_top50_daily_wGenres['snapshot_date'].min(),
@@ -104,7 +104,8 @@ layout = html.Div([
             html.Label(children=html.B('Window Size:'), style={'marginRight': '10px'}),
             dcc.RadioItems(
                 id='sliding-window',
-                options=[{'label': str(i+1), 'value': i+1} for i in range(5 ) if not i%2],
+                options=[{'label': str(i+1), 'value': i+1} for i in range(5) if not i%2],
+                # options=[{'label': str(i), 'value': i} for i in [1, 5, 10, 15, 25]],
                 value=1,
                 inline=True
             )
@@ -114,17 +115,42 @@ layout = html.Div([
 
 @callback(
     Output('crossfilter-indicator-scatter', 'figure'),
+    Output('crossfilter-date--picker', 'date'),
     Input('crossfilter-xaxis-column', 'value'),
     Input('crossfilter-yaxis-column', 'value'),
     Input('crossfilter-xaxis-type', 'value'),
     Input('crossfilter-yaxis-type', 'value'),
-    Input('crossfilter-year--slider', 'date'))
+    Input('crossfilter-date--picker', 'date'),
+    Input('x-time-series', 'clickData'),
+    Input('y-time-series', 'clickData'),
+    )
 def update_graph(xaxis_column_name, yaxis_column_name,
                  xaxis_type, yaxis_type,
-                 year_value):
+                 year_value, data_from_ts_x, data_from_ts_y):
   
   grouped_d = spotify_top50_daily_wGenres.groupby([ 'country_name', 'snapshot_date', 'country_region']).mean().reset_index()
-  grouped_d = grouped_d[grouped_d['snapshot_date'] == year_value]
+  
+    
+  # Determine which input triggered the callback
+  ctx = callback_context
+  triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+  
+  
+  
+  if triggered_id == 'x-time-series':
+    #   print(data_from_ts_x['points'][0]['x'])
+      grouped_d = grouped_d[grouped_d['snapshot_date'] == data_from_ts_x['points'][0]['x']]
+      update_date_picker = data_from_ts_x['points'][0]['x']
+  elif triggered_id == 'y-time-series':
+    #   print(data_from_ts_y['points'][0]['x'])
+      grouped_d = grouped_d[grouped_d['snapshot_date'] == data_from_ts_y['points'][0]['x']]
+      update_date_picker = data_from_ts_y['points'][0]['x']
+  else:
+      grouped_d = grouped_d[grouped_d['snapshot_date'] == year_value]
+      update_date_picker = dash.no_update
+      
+    
+  
   # filtered_data = grouped_d[(grouped_d['snapshot_date'] >= start_date) & (grouped_d['snapshot_date'] <= end_date)]
   
   fig = px.scatter(grouped_d, x=xaxis_column_name, y=yaxis_column_name, color='country_region',
@@ -161,7 +187,7 @@ def update_graph(xaxis_column_name, yaxis_column_name,
 
   fig.update_layout(margin={'l': 40, 'b': 40, 't': 10, 'r': 0}, hovermode='closest')
 
-  return fig
+  return fig, update_date_picker
 
 
 def create_time_series(dff, axis_type, title, column_name):

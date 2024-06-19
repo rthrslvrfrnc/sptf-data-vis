@@ -110,7 +110,7 @@ layout = html.Div([
     # Interactive visualizations from the first section
     html.Div([
         html.Div([
-            dcc.Graph(id='enao-graph', style={'width': '100%', 'height': '600px',}, clickData={'points': [{'customdata': ['Global']}]})
+            dcc.Graph(id='enao-graph', style={'width': '100%', 'height': '600px',},config={'modeBarButtonsToRemove':['lasso2d']}, clickData={'points': [{'customdata': ['Global']}]})
         ]),
     ], style={'min-height': '100%', 'height': 'auto'}),
     html.Div([
@@ -134,6 +134,7 @@ layout = html.Div([
             html.H2(id='table-genres-title'),
             dash_table.DataTable(
                 sort_action="native",
+                filter_action='native',
                 style_data={
                     'whiteSpace': 'normal',
                     'height': 'auto',
@@ -156,9 +157,13 @@ layout = html.Div([
                     'if': {'column_id': 'genres'},
                     'textAlign': 'left'
                 },
+                {
+                    'if': {'column_id': 'country_name'},
+                    'textAlign': 'left'
+                },
             ],
                 id='music-table-genre',
-                columns=[{'name': 'Music', 'id': 'track_name'}, {'name': 'Artists', 'id': 'artists'}, {'name': 'Genres', 'id': 'genres'}],
+                columns=[{'name': 'Music', 'id': 'track_name'}, {'name': 'Artists', 'id': 'artists'}, {'name': 'Genres', 'id': 'genres'}, {'name': 'Country', 'id': 'country_name'}],
                 data=[],
                 page_size=10
             )
@@ -302,33 +307,89 @@ def update_graph_and_dropdown(start_date, end_date, country_names, scaling_facto
      Output('music-table-genre', 'data')],
     [Input('date-range-picker', 'start_date'),
      Input('date-range-picker', 'end_date'),
-    #  Input('country-dropdown', 'value'),
+     Input('enao-graph', 'selectedData'),
      Input('enao-graph', 'clickData')]
 )
-def update_table(start_date, end_date, clickData):
-    country_name = clickData['points'][0]['customdata'][0]
+def update_table(start_date, end_date,selectedData, clickData):
+    
     # print(clickData, flush=True)
     # Custom Playlist
-
+    # if selectedData:
+    #     print(selectedData)
+    #     print(len(selectedData['points']))
     
-    filtered_df = filter_by_country_and_date(start_date, 
+    
+    
+    ctx = callback_context
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    
+    if triggered_id == 'enao-graph' and ctx.triggered[0]['prop_id'].endswith('selectedData'):
+        if selectedData:
+            countries = []
+            genres = set()
+            for point in selectedData['points']:
+                # print(point)
+                genre = point['hovertext']
+                genres.update(genre.split(', '))
+                if point['customdata'][0] not in countries:
+                    countries.append(point['customdata'][0])
+            # print(countries)
+            title = " Songs in " + ', '.join(countries)
+            
+            filtered_df = filter_by_country_and_date(start_date, 
+                                             end_date, 
+                                             countries,
+                                             multy_country=True,
+                                             drop_duplicates=True, 
+                                             drop_subset='spotify_id', 
+                                             cols=['spotify_id', 'track_name', 'artists', 'genres', 'country_name'])
+            
+            # Filter the DataFrame for rows containing any of these genres
+            data_table = filtered_df[filtered_df['genres'].apply(lambda x: isinstance(x, str) and any(g in x.split(', ') for g in genres))]
+            # Remove all rows with duplicate values in column 'A'
+            data_table = data_table.drop_duplicates(subset=['track_name'], keep='first')
+            # Select the desired columns
+            data_table = data_table[['track_name', 'artists', 'genres', 'country_name']]
+
+            # Create the title string from the selected genres
+            title = 'Selected genres' + title
+        else: 
+            return dash.no_update, dash.no_update
+    elif triggered_id == 'enao-graph' and ctx.triggered[0]['prop_id'].endswith('clickData'):
+        country_name = clickData['points'][0]['customdata'][0]
+        title = " Songs in " + country_name
+        
+        if 'hovertext' in clickData['points'][0].keys():
+            filtered_df = filter_by_country_and_date(start_date, 
                                              end_date, 
                                              country_name,
                                              drop_duplicates=True, 
                                              drop_subset='spotify_id', 
-                                             cols=['spotify_id', 'track_name', 'artists', 'genres'])
-    
-    # Split genres in df_songs into individual rows
-    # filtered_data_gere_exp = filtered_df.assign(genres=filtered_df['genres'].str.split(', ')).explode('genres')
-
-    title = " Songs in " + country_name
-    if 'hovertext' in clickData['points'][0].keys():
-        genre = clickData['points'][0]['hovertext']
-        data_table = filtered_df[filtered_df['genres'].apply(lambda x: isinstance(x, str) and genre in x.split(', '))]
-        data_table = data_table[['track_name', 'artists', 'genres']]
-        title = genre + title
+                                             cols=['spotify_id', 'track_name', 'artists', 'genres', 'country_name'])
+            genre = clickData['points'][0]['hovertext']
+            data_table = filtered_df[filtered_df['genres'].apply(lambda x: isinstance(x, str) and genre in x.split(', '))]
+            data_table = data_table[['track_name', 'artists', 'genres', 'country_name']]
+            title = genre + title
+        else:
+            filtered_df = filter_by_country_and_date(start_date, 
+                                             end_date, 
+                                             country_name,
+                                             drop_duplicates=True, 
+                                             drop_subset='spotify_id', 
+                                             cols=['spotify_id', 'track_name', 'artists', 'genres', 'country_name'])
+            data_table = filtered_df[['track_name', 'artists', 'genres', 'country_name']]
     else:
-        data_table = filtered_df[['track_name', 'artists', 'genres']]
+        country_name = clickData['points'][0]['customdata'][0]
+        title = " Songs in " + country_name
+        filtered_df = filter_by_country_and_date(start_date, 
+                                             end_date, 
+                                             country_name,
+                                             drop_duplicates=True, 
+                                             drop_subset='spotify_id', 
+                                             cols=['spotify_id', 'track_name', 'artists', 'genres', 'country_name'])
+        data_table = filtered_df[['track_name', 'artists', 'genres', 'country_name']]
+    
+
 
     
     return title, data_table.to_dict('records')
@@ -349,20 +410,33 @@ def find_factors(n_country):
     
     return f1, f2
 
-def filter_by_country_and_date(start_date, end_date, country_name, filter_date=True, drop_duplicates=False, drop_subset=None, cols=[]):
+def filter_by_country_and_date(start_date, end_date, country_name, filter_date=True, drop_duplicates=False, drop_subset=None, cols=[],multy_country=False):
     
     if filter_date:
-        date_country_filtered = spotify_top50_daily_wGenres[
+        if multy_country:
+            date_country_filtered = spotify_top50_daily_wGenres[
                                     (
                                         (spotify_top50_daily_wGenres['snapshot_date'] >= start_date) &
                                         (spotify_top50_daily_wGenres['snapshot_date'] <= end_date) &
-                                        (spotify_top50_daily_wGenres['country_name'] == country_name)
+                                        (spotify_top50_daily_wGenres['country_name'].isin(country_name))
                                     ) |
                                     (
                                         (spotify_top50_daily_wGenres['snapshot_date'] == '') &
-                                        (spotify_top50_daily_wGenres['country_name'] == country_name)
+                                         (spotify_top50_daily_wGenres['country_name'].isin(country_name))
                                     )
                                 ]
+        else:  
+            date_country_filtered = spotify_top50_daily_wGenres[
+                                        (
+                                            (spotify_top50_daily_wGenres['snapshot_date'] >= start_date) &
+                                            (spotify_top50_daily_wGenres['snapshot_date'] <= end_date) &
+                                            (spotify_top50_daily_wGenres['country_name'] == country_name)
+                                        ) |
+                                        (
+                                            (spotify_top50_daily_wGenres['snapshot_date'] == '') &
+                                            (spotify_top50_daily_wGenres['country_name'] == country_name)
+                                        )
+                                    ]
     else:
         date_country_filtered = spotify_top50_daily_wGenres[
                                               (spotify_top50_daily_wGenres['country_name'] == country_name)
