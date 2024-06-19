@@ -347,7 +347,7 @@ def update_table(start_date, end_date,selectedData, clickData):
             # Filter the DataFrame for rows containing any of these genres
             data_table = filtered_df[filtered_df['genres'].apply(lambda x: isinstance(x, str) and any(g in x.split(', ') for g in genres))]
             # Remove all rows with duplicate values in column 'A'
-            data_table = data_table.drop_duplicates(subset=['track_name'], keep='first')
+            data_table = data_table.drop_duplicates(subset=['track_name', 'country_name'], keep='first')
             # Select the desired columns
             data_table = data_table[['track_name', 'artists', 'genres', 'country_name']]
 
